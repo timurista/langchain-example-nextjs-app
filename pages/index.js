@@ -1,4 +1,4 @@
-import { useRef, useEffect, useContext } from 'react';
+import { useRef, useEffect, useState, useContext } from 'react';
 import { observer } from 'mobx-react-lite';
 import { StoreContext } from 'mobx-react-lite';
 import Head from 'next/head';
@@ -12,6 +12,7 @@ const Home = observer(() => {
   const { conversationStore } = useStore();
   const messageListRef = useRef(null);
   const textAreaRef = useRef(null);
+  const [streamedMessage, setStreamedMessage] = useState('');
 
   // Auto scroll chat to bottom
   useEffect(() => {
@@ -22,6 +23,25 @@ const Home = observer(() => {
   // Focus on text field on load
   useEffect(() => {
     textAreaRef.current.focus();
+  }, []);
+
+  useEffect(() => {
+    const source = new EventSource('/api/chat');
+
+    source.onmessage = function (event) {
+      const token = JSON.parse(event.data);
+      console.log('Received token from server:', token);
+      setStreamedMessage((prevStreamedMessage) => prevStreamedMessage + token.text);
+    };
+
+    source.onerror = function (error) {
+      console.error('Error occurred while streaming tokens:', error);
+      source.close();
+    };
+
+    return () => {
+      source.close();
+    };
   }, []);
 
   // Handle errors
@@ -82,7 +102,7 @@ const Home = observer(() => {
   };
 
   // Prevent blank submissions and allow for multiline input
-  const handleEnter = (e) => {
+  const handleEnter = async (e) => {
     if (e.key === 'Enter' && conversationStore.userInput) {
       if (!e.shiftKey && conversationStore.userInput) {
         handleSubmit(e);
@@ -91,6 +111,17 @@ const Home = observer(() => {
       e.preventDefault();
     }
   };
+
+  useEffect(() => {
+    if (streamedMessage) {
+      const lastMessageIndex = conversationStore.messages.length - 1;
+      conversationStore.updateMessage(lastMessageIndex, {
+        message: streamedMessage,
+        type: 'apiMessage',
+      });
+      setStreamedMessage('');
+    }
+  }, [streamedMessage]);
 
   // Keep history in sync with messages
   useEffect(() => {
@@ -230,7 +261,7 @@ const Home = observer(() => {
                 LangChain
               </a>
               . Built by{' '}
-              <a href="https://twitter.com/chillzaza_" target="_blank">
+              <a href="https://twitter.com/timurista" target="_blank">
               Tim Urista
           </a>
           .
